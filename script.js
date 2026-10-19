@@ -383,137 +383,102 @@ if (photoInput) {
    SUBMIT REQUEST
 ========================================================= */
 
-const requestForm =
-    document.getElementById(
-        "requestForm"
-    );
+
+const requestForm = document.getElementById("requestForm");
 
 if (requestForm) {
+    requestForm.addEventListener("submit", async function (event) {
+        event.preventDefault();
 
-    requestForm.addEventListener(
-        "submit",
-        function(event) {
+        const message = document.getElementById("formMessage");
+        const button = requestForm.querySelector(
+            'button[type="submit"], input[type="submit"]'
+        );
 
-            event.preventDefault();
+        const title = document.getElementById("title").value.trim();
+        const location = document.getElementById("location").value.trim();
+        const category = document.getElementById("category").value;
+        const description = document.getElementById("description").value.trim();
+        const priority =
+            document.getElementById("priority")?.value || "Medium";
 
-            const title =
-                document
-                    .getElementById("title")
-                    ?.value.trim() || "";
+        if (!title || !location || !category || !description) {
+            if (message) {
+                message.textContent = "Please fill in all required fields.";
+            }
+            return;
+        }
 
-            const location =
-                document
-                    .getElementById("location")
-                    ?.value.trim() || "";
+        if (button) button.disabled = true;
+        if (message) message.textContent = "Submitting complaint...";
 
-            const category =
-                document
-                    .getElementById("category")
-                    ?.value || "";
+        try {
+            // Verify the logged-in Supabase user
+            const { data: authData, error: authError } =
+                await supabaseClient.auth.getUser();
 
-            const description =
-                document
-                    .getElementById("description")
-                    ?.value.trim() || "";
+            if (authError) throw authError;
 
-            const priority =
-                document
-                    .getElementById("priority")
-                    ?.value || "Medium";
+            const user = authData.user;
 
-            const message =
-                document.getElementById(
-                    "formMessage"
-                );
-
-            if (
-                !title ||
-                !location ||
-                !category ||
-                !description
-            ) {
-
-                if (message) {
-
-                    message.style.color =
-                        "#e94b4b";
-
-                    message.textContent =
-                        "Please fill all required fields.";
-                }
-
-                return;
+            if (!user) {
+                throw new Error("Please log in before submitting.");
             }
 
-            const now =
-                new Date().toISOString();
-
-            const request = {
-
-                id: generateRequestId(),
-
-                user: "Student",
-
-                issue: title,
-
+            // Save the complaint in Supabase
+            const complaint = {
+                request_id: "MR-" + crypto.randomUUID(),
+                user_id: user.id,
                 title: title,
-
-                room: location,
-
                 location: location,
-
                 category: category,
-
                 priority: priority,
-
                 description: description,
-
-                evidence:
-                    selectedPhotoData || "",
-
-                photo:
-                    selectedPhotoData || "",
-
-                status: "Pending",
-
-                createdAt: now,
-
-                updatedAt: now
+                photo: typeof selectedPhotoData !== "undefined"
+                    ? (selectedPhotoData || null)
+                    : null,
+                status: "Pending"
             };
 
-            const requests =
-                getRequests();
+            const { data, error } = await supabaseClient
+                .from("complaints")
+                .insert([complaint])
+                .select()
+                .single();
 
-            requests.push(request);
+            if (error) throw error;
 
-            saveRequests(requests);
-
-            addNotification(
-                "New maintenance request submitted.",
-                request.id
-            );
+            console.log("Complaint saved successfully:", data);
 
             if (message) {
-
-                message.style.color =
-                    "#18a866";
-
                 message.textContent =
-                    `Request ${request.id} submitted successfully.`;
+                    "Complaint submitted successfully! ID: " +
+                    data.request_id;
             }
 
-            setTimeout(
-                function() {
+            requestForm.reset();
 
-                    window.location.href =
-                        "student-dashboard.html";
+            // Clear the photo preview, if present
+            if (typeof selectedPhotoData !== "undefined") {
+                selectedPhotoData = "";
+            }
 
-                },
-                800
-            );
+            const preview = document.getElementById("photoPreview");
+            if (preview) preview.innerHTML = "";
+
+        } catch (error) {
+            console.error("Complaint submission failed:", error);
+
+            if (message) {
+                message.textContent =
+                    "Submission failed: " + error.message;
+            }
+        } finally {
+            if (button) button.disabled = false;
         }
-    );
+    });
 }
+
 
 /* =========================================================
    STUDENT DASHBOARD STATISTICS
